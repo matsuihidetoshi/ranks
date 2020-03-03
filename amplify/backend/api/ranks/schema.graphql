@@ -1,0 +1,24 @@
+type User#Cognitoユーザーの追加情報様テーブル
+  @model
+  @auth(rules: [
+    {allow: groups, groups: ["Admin"]},#Adminグループは、queries(取得系)とmutations(更新系)可能
+    {allow: owner}#owner(本人)なら全部可
+  ])
+{
+  id: ID!
+  name: String!#名前
+  phone: String#電話番号(twilio用)
+}
+type Result#結果用テーブル(1レコード:1人で各問題ごとのスコア、合否を格納)
+  @model
+  @auth(rules: [
+    {allow: groups, groups: ["Admin"]},#Adminグループは、queries(取得系)とmutations(更新系)可能
+    {allow: private, queries: [get, list], mutations: null},#private(ログインしてる人全て)ならqueries(取得系)のみ可
+    {allow: owner}#owner(本人)なら全部可(ほんとは許可せずにLambdaから点数更新したいが、とりあえず)
+  ])
+{
+  id: ID!
+  name: String!#名前
+  scores: [Float]!#各問題ごとのスコアを配列で格納
+  successes: [Int]!#各問題ごとの合否(否:0, 合:1)を配列で格納
+}

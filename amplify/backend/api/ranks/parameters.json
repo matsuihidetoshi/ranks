@@ -1,0 +1,11 @@
+{
+    "AppSyncApiName": "ranks",
+    "DynamoDBBillingMode": "PAY_PER_REQUEST",
+    "DynamoDBEnableServerSideEncryption": "false",
+    "AuthCognitoUserPoolId": {
+        "Fn::GetAtt": [
+            "authranksfbc8f8c4",
+            "Outputs.UserPoolId"
+        ]
+    }
+}
