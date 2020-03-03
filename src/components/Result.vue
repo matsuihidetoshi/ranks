@@ -1,9 +1,14 @@
 <template>
   <div class="result">
-    <h1>Results</h1>
+    <p>id: {{ id }}</p>
+    <div v-for="(result, index) in results" v-bind:key="index">
+      <p>id: {{ result.id }}</p>
+    </div>
+    <h1 v-if="(rank)">Rank</h1>
+    <h1 v-else>Results</h1>
     <div class="results-area">
-      <div v-for="(result, id) in results" v-bind:key="id">
-        <div class="single-result">
+      <div v-for="(result, index) in results" v-bind:key="index">
+        <div class="single-result" v-bind:class="{ selected: (id == result.id) }" v-on:click="selectId(result.id)">
           <div>id: {{ result.id }}</div>
           <div>name: {{ result.name }}</div>
           <div v-for="(score, index) in result.scores" v-bind:key="`score-${index}`">
@@ -15,33 +20,43 @@
         </div>
       </div>
     </div>
-    <div id="chat-form">
+    <div>
       <button class="submit" v-on:click="createResult()">Post</button>
+    </div>
+    <div>
+      <button class="submit" v-on:click="updateResult()">Update</button>
+    </div>
+    <div>
+      <button class="submit" v-on:click="switchResult()">
+        <span v-if="(rank)">Result</span>
+        <span v-else>Rank</span>
+      </button>
     </div>
   </div>
 </template>
 <script>
 import { API, Auth, graphqlOperation} from "aws-amplify"
-import { createResult } from "../graphql/mutations"
+import { createResult, updateResult } from "../graphql/mutations"
 import { listResults } from "../graphql/queries"
 import { getResult } from "../graphql/queries"
-import { onCreateResult } from "../graphql/subscriptions"
+import { onCreateResult, onUpdateResult } from "../graphql/subscriptions"
 import _ from 'lodash'
 
 export default {
   name: 'Result',
   data () {
     return {
-      scores: [99.9, 100.0, 150.1],
+      id: null,
+      scores: [19.8, 19.0, 10.1],
       successes: [1, 0, 1],
       result: null,
       results: [],
       owner: "",
       limit: 2 ** 31 - 1,
       user: null,
-      test: null,
       name: "test name 2",
-      groups: []
+      groups: [],
+      rank: false
     }
   },
   mounted: function () {
@@ -50,9 +65,20 @@ export default {
     )
   },
   methods: {
+    selectId: function (id) {
+      this.id = id
+    },
     setOwner: async function () {
       this.user = await Auth.currentUserPoolUser(this.user)
       this.owner = this.user.username
+    },
+    switchResult: function () {
+      if (this.rank == true) {
+        this.rank = false
+      } else {
+        this.rank = true
+      }
+      this.displayResults()
     },
     createResult: async function () {
       if (this.scores === [] || this.successes === []) return
@@ -66,11 +92,27 @@ export default {
         error
       }
     },
+    updateResult: async function () {
+      if (this.scores === [] || this.successes === []) return
+      const result = {scores: [111.111, 222.222, 333.333], successes: [1, 1, 1], id: this.id}
+      try {
+        this.scores = []
+        this.successes = []
+        await API.graphql(graphqlOperation(updateResult, {input: result}))
+      } catch (error) {
+        error
+      }
+    },
     displayResults: async function () {
       let results = await API.graphql(graphqlOperation(
         listResults, {limit: this.limit}
       ))
-      this.results = _.orderBy(results.data.listResults.items, 'id', 'desc').slice(0, 100)
+      results = results.data.listResults.items
+      results.forEach(result => {
+        result['sum'] = result['scores'].reduce((a,x) => a+=x,0)
+      })
+      this.results = _.orderBy(results, 'sum', 'desc').slice(0, 100)
+      if (!this.rank) {this.results = this.results.filter(result => result['owner'] == this.owner)}
       
       API.graphql(
         graphqlOperation(onCreateResult, {limit: this.limit, owner: this.owner})
@@ -78,11 +120,28 @@ export default {
         next: (eventData) => {
           const result = eventData.value.data.onCreateResult
           const results = [...this.results, result]
-          this.results = _.orderBy(results, 'id', 'desc').slice(0, 100)
+          results.forEach(result => {
+            result['sum'] = result['scores'].reduce((a,x) => a+=x,0)
+          })
+          this.results = _.orderBy(results, 'sum', 'desc').slice(0, 100)
+          if (!this.rank) {this.results = this.results.filter(result => result['owner'] == this.owner)}
         }
       })
-      const user = await Auth.currentUserPoolUser(user)
-      this.groups = user.signInUserSession.accessToken.payload['cognito:groups']
+
+      API.graphql(
+        graphqlOperation(onUpdateResult, {limit: this.limit, owner: this.owner})
+      ).subscribe({
+        next: (eventData) => {
+          const result = eventData.value.data.onUpdateResult
+          const results = [...this.results, result]
+          results.forEach(result => {
+            result['sum'] = result['scores'].reduce((a,x) => a+=x,0)
+          })
+          this.results = _.orderBy(results, 'sum', 'desc').slice(0, 100)
+          this.results = Array.from(new Set(this.results))
+          if (!this.rank) {this.results = this.results.filter(result => result['owner'] == this.owner)}
+        }
+      })
     },
     singleResult: async function (selectedNote) {
       let result = await API.graphql(graphqlOperation(
@@ -122,5 +181,8 @@ export default {
     margin: 10px 0 10px 0;
     overflow-wrap: break-word;
     white-space: pre-line;
+  }
+  .selected {
+    background-color: #99ddee;
   }
 </style>
