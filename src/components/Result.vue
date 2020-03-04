@@ -65,6 +65,13 @@ export default {
     )
   },
   methods: {
+    deduplicate: function (results) {
+      return results.filter(function(v1,i1,a1){ 
+        return (a1.findIndex(function(v2){ 
+          return (v1.id === v2.id) 
+        }) === i1)
+      })
+    },
     selectId: function (id) {
       this.id = id
     },
@@ -138,8 +145,8 @@ export default {
             result['sum'] = result['scores'].reduce((a,x) => a+=x,0)
           })
           this.results = _.orderBy(results, 'sum', 'desc').slice(0, 100)
-          this.results = Array.from(new Set(this.results))
           if (!this.rank) {this.results = this.results.filter(result => result['owner'] == this.owner)}
+          this.results = this.deduplicate(this.results)
         }
       })
     },
